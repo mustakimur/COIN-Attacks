@@ -165,6 +165,8 @@ cd $PROJECT_ROOT/scripts/SGX_SQLite/
 ./run.sh
 ```
 
+*Note: Source codes are unmodified but Makefiles to build the projects with CLang/LLVM.*
+
 ## Screenshots
 <img align="left" width="558px" src="images/so_report.png">
 <img align="right" width="585px" src="images/uaf_report.png">
