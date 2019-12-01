@@ -1,12 +1,12 @@
-# COIN ATTACK [ASPLOS 2020]
+# COIN ATTACKS [ASPLOS 2020]
 <img align="right" src="images/coins.gif">
 
-COIN attack demonstrates the weakness in SGX enclave software model. We define three attacks in the enclave interface:
+COIN attacks demonstrates the weakness in SGX enclave software model. We define three attacks in the enclave interface:
 * ECALL permutation
 * Concurrent ECALLs
 * Input manipulation
 
-We have developed an extensible framework to independently analyze an enclave on the presence of COIN attack. Our prototype have implemented 8 security policies that could detect:
+We have developed an extensible framework to independently analyze an enclave on the presence of COIN attacks. Our prototype have implemented 8 security policies that could detect:
 * Heap memory leak
 * Stack memory leak
 * Ineffectual condition
@@ -133,6 +133,10 @@ sudo cp $PROJECT_ROOT/src/semantics/llvm_src/build/lib/libLTO.* ./
 ```
 
 ### Triton
+Pre-requisite:
+```
+sudo apt-get install python-pip libcapstone-dev libboost-all-dev libz3-dev
+```
 1. Python LIEF library install.
 ```
 sudo pip install lief
