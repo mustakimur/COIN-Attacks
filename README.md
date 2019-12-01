@@ -156,7 +156,7 @@ cmake ..
 sudo make -j2 install
 ```
 ### SGX SDK
-Install the Intel SGX SDK following the guideline: https://github.com/intel/linux-sgx
+Install the Intel SGX SDK (into /opt/intel/sgxsdk/) following the guideline: https://github.com/intel/linux-sgx
 
 ## Run
 There are scripts available to run PoCs and GitHub projects into the system. For example, to test SGX_SQLite projects, use:
