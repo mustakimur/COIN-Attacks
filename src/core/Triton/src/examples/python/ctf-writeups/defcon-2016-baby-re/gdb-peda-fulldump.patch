@@ -1,0 +1,57 @@
+diff --git a/peda.py b/peda.py
+index 31eae61..40b6f2c 100644
+--- a/peda.py
++++ b/peda.py
+@@ -5999,6 +5999,52 @@ class PEDACmd(object):
+         return
+     utils.options = ["int2hexstr", "list2hexstr", "str2intlist"]
+ 
++    def fulldump(self, *arg):
++        """
++        Generate a full dump of the current execution
++        Usage:
++            fulldump <filename output>
++        """
++        (filename,) = normalize_argv(arg, 1)
++        if not filename:
++            filename = "fulldump.dump"
++
++        pid = peda.getpid()
++        if not pid:
++            return False
++
++        maps = peda.get_vmmap()
++        if not maps:
++            return False
++
++        memory = list()
++        for s, e, x, f in maps:
++            raw  = peda.dumpmem(s, e)
++            memory.append({"start": s, "end": e, "memory": raw, "permissions": x, "name": f})
++
++        # GPR
++        regs = peda.getregs()
++
++        # XMM
++        arch, bits = peda.getarch()
++        cnt = (8 if bits == 32 else 16)
++        for i in range(cnt):
++            xmm = peda.execute_redirect("info registers xmm%d" % (i))
++            xmm = xmm.splitlines()
++            xmm = int(xmm[7].split()[2], 16)
++            regs.update({"xmm%d" % (i): xmm})
++
++        dump = (regs, memory)
++
++        fd = open(filename, "w")
++        fd.write(repr(dump))
++        fd.close()
++
++        msg("Full dump saved into %s" % (filename))
++
++        return True
++
++
+ ###########################################################################
+ class pedaGDBCommand(gdb.Command):
+     """
