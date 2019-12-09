@@ -2,9 +2,9 @@
 <img align="right" src="images/coins.gif">
 
 COIN attacks demonstrates the weakness in SGX enclave software model. We define three attacks in the enclave interface:
-* ECALL permutation
-* Concurrent ECALLs
-* Input manipulation
+* (C)oncurrent ECALLs
+* (O)rder of ECALLs
+* (In)put manipulation
 
 We have developed an extensible framework to independently analyze an enclave on the presence of COIN attacks. Our prototype have implemented 8 security policies that could detect:
 * Heap memory leak
@@ -70,6 +70,9 @@ COIN Attack
 ```
 
 ## Build
+```
+export PROJECT_ROOT=path_to_repository_head
+```
 ### LLVM Tool
 1. Install required library for Gold plugin:
 ```text
@@ -162,7 +165,10 @@ sudo make -j2 install
 ### SGX SDK
 Install the Intel SGX SDK (into /opt/intel/sgxsdk/) following the guideline: https://github.com/intel/linux-sgx
 
-## Run
+## Usage
+```
+export PROJECT_ROOT=path_to_repository_head
+```
 There are scripts available to run PoCs and GitHub projects into the system. For example, to test SGX_SQLite projects, use:
 ```
 cd $PROJECT_ROOT/scripts/SGX_SQLite/

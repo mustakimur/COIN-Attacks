@@ -10,10 +10,9 @@ import lief
 import base64
 import copy
 import policies
-import collections
 import threading
 
-MAX_SEED_ATTEMPT = 20
+MAX_SEED_ATTEMPT = 50
 
 # DEBUG Flags
 STEP_DEBUG = False                      # CORE modules steps information
@@ -23,7 +22,8 @@ PRINT_INST_DEBUG = False                # print instruction
 MEMORY_DEBUG = False                    # memory information
 EMUL_DEBUG = False                      # emulation updates
 SYM_DEBUG = False                       # symbolic information
-WARN_DEBUG = True                       # show warning
+REPORT_DEBUG = True
+WARN_DEBUG = False                       # show warning
 
 # constant tag to identify string and user semantics tag
 CONST_USER = 10003
@@ -48,7 +48,7 @@ Triton.setMode(MODE.TAINT_THROUGH_POINTERS, True)
 # memory map information
 BASE_PLT = 0x10000000
 BASE_STACK = 0x9fffffff
-type_mem_size_mem = {CHAR_TY: 1, SHORT_TY: 2,
+type_mem_size_mem = {OPEN_TY: 0, CLOSE_TY: 0, CHAR_TY: 1, SHORT_TY: 2,
                      INT_TY: 4, LONG_TY: 8, POINTER_TY: 8}
 
 # x86-64 call convention sequence of register for argument
@@ -67,9 +67,6 @@ fn_param_seed_map = dict()
 next_mem_write_flag = dict()
 DDoS = dict()
 inst_ring_buffer = dict()
-# ring buffer of emulated instructions
-inst_emul_report = collections.deque(
-    maxlen=200)
 # compiler instrumented warning flag in enclave
 sgx_warn_tag = {'__stack_chk_fail': 0x0}
 emul_thread_lock = threading.Lock()
@@ -82,12 +79,12 @@ print_report() prints the vulnerability report in format
 def print_report():
     print(policies.get_reported_msg())
     print('Recent 200 emulated instructions: ')
-    for inst in inst_emul_report:
+    for inst in policies.get_inst_ring_buffer():
         print(inst)
-    if SYM_DEBUG:
+    if REPORT_DEBUG:
         print('Seed information: ')
         for k, v in seed_mem_layout.iteritems():
-            print(hex(k), ' => ', hex(v))
+            print(hex(k), '[', hex(v), '] ', end =" ")
 
 
 """
@@ -375,8 +372,6 @@ def force_return_to_callsite(ret_rax_val):
         Triton.registers.rsp,
         Triton.getConcreteRegisterValue(Triton.registers.rsp) + CPUSIZE.QWORD)
 
-    policies.process_ret(pc)
-
     if EMUL_DEBUG:
         print('[EMULATION] force to return at 0x%x ...' %
               (Triton.getConcreteRegisterValue(Triton.registers.rip)))
@@ -516,9 +511,12 @@ def config_memory_for_param(fn_name, param_info, pc, init_seed_flag, is_ECALL):
     if is_ECALL:
         param_cnt = 0
         param_reg_addr = 0
+        org_param_reg_addr = 0
         for param in param_mem_layout:
             if param_cnt == 0 and param == POINTER_TY:
                 param_reg_addr = req_allocate_memory(max_param_mem_size)
+                org_param_reg_addr = param_reg_addr
+                #print('[SET] Pointer memory at 0x%x of size %d' %(param_reg_addr, max_param_mem_size))
                 Triton.setConcreteRegisterValue(
                     x64_arg_reg_seq[param_pos], param_reg_addr)
             elif param_cnt > 0:
@@ -533,6 +531,13 @@ def config_memory_for_param(fn_name, param_info, pc, init_seed_flag, is_ECALL):
                                                                        init_seed_flag)
 
             param_cnt += 1
+
+        """ if(param_mem_layout[0] == POINTER_TY):
+            data = Triton.getConcreteMemoryAreaValue(org_param_reg_addr, max_param_mem_size)
+            print('[USED] At memory address 0x%x of size %d' %(org_param_reg_addr, max_param_mem_size))
+            for d in range(0, max_param_mem_size):
+                print(data[d], end=' ')
+            print('') """
 
 
 """
@@ -656,10 +661,18 @@ def emulate(pc, sgx_ocall, sgx_free, is_threaded):
         instruction.setOpcode(opcode)
         instruction.setAddress(pc)
 
-        if not Triton.processing(instruction):
-            print('[LIMITATION] unsupported instruction at 0x%x' % (pc))
-            Triton.setConcreteRegisterValue(Triton.registers.rip,
+        try:
+            ret = Triton.processing(instruction)
+            
+            if not ret:
+                if WARN_DEBUG:
+                    print('[LIMITATION] unsupported instruction at 0x%x' % (pc))
+                Triton.setConcreteRegisterValue(Triton.registers.rip,
                                             instruction.getNextAddress())
+        except:
+            print('[EXCEPTION] instruction process error ...')
+            break
+
         count += 1
 
         inst_ring_buffer[instruction.getAddress()] = True
@@ -672,7 +685,7 @@ def emulate(pc, sgx_ocall, sgx_free, is_threaded):
         if (PRINT_INST_DEBUG and instruction.getType() == OPCODE.X86.CALL):
             print('[INSTRUCTION] call instruction: ', instruction)
 
-        inst_emul_report.append(instruction)
+        policies.push_inst_to_ring_buffer(instruction)
 
         policies.inspection(instruction)
 
@@ -737,8 +750,7 @@ def run_single_thread_emul(perm_ECALLs_list):
         inst_ring_buffer.clear()
         DDoS.clear()
 
-        if EMUL_DEBUG:
-            print('[EMULATION] attempted sequence: ', order_ECALLs)
+        print('[EMULATION] attempted sequence: ', order_ECALLs)
 
         while seed_worklist:
             stack_base_addr = BASE_STACK
@@ -904,7 +916,8 @@ def run_concurrent_emul(list_ECALLs):
         del seed_worklist[seed_cnt]
 
         if (len(seed_worklist) > 0):
-            seed_cnt = random.randint(0, len(seed_worklist) - 1)
+            #seed_cnt = random.randint(0, len(seed_worklist) - 1)
+            seed_cnt = 0
             prep_next_input(seed_worklist[seed_cnt])
 
         if SYM_DEBUG:

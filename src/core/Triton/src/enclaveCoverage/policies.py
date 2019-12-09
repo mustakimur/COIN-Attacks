@@ -1,6 +1,7 @@
 from __future__ import print_function
 from triton import TritonContext, ARCH, MemoryAccess, CPUSIZE, Instruction, OPCODE, MODE, OPERAND, REG
 import threading
+import collections
 
 MAX_INST_DELAY = 10
 BASE_ALLOC = 0x30000000
@@ -12,6 +13,9 @@ Triton = None
 is_report_flag = False
 reported_msg_txt = ""
 reported_item = []
+# ring buffer of emulated instructions
+inst_emul_report = collections.deque(
+    maxlen=200)
 
 # mapping register presenation of different size to their 64-bit register
 RegMap = {
@@ -42,33 +46,11 @@ RegMap = {
 }
 
 
-class Stack:
-    # standard python stack implementation
-    def __init__(self):
-        self.items = []
-
-    def isEmpty(self):
-        return self.items == []
-
-    def push(self, item):
-        self.items.append(item)
-
-    def pop(self):
-        return self.items.pop()
-
-    def peek(self):
-        return self.items[len(self.items) - 1]
-
-    def size(self):
-        return len(self.items)
-
-
 heap_map = dict()
 heap_story = dict()
 thread_lock_track = dict()
 reg_prev_status = dict()
 mem_prev_status = dict()
-call_stack = dict()
 
 heap_alloc_base = BASE_ALLOC
 current_heap_alloc = 0
@@ -79,17 +61,12 @@ policy intialize related task
 
 
 def init_emulator():
-    global call_stack
-    call_stack[threading.currentThread().ident] = Stack()
-    call_stack[threading.currentThread().ident].push(0x0)
-
     reg_prev_status.clear()
     mem_prev_status.clear()
 
 
 def exit_emulator():
-    global call_stack
-    del call_stack[threading.currentThread().ident]
+    None
 
 
 def init_policy_module(triton):
@@ -135,6 +112,11 @@ def set_thread_locked():
 reporting related task handler
 """
 
+def get_inst_ring_buffer():
+    return inst_emul_report
+
+def push_inst_to_ring_buffer(inst):
+    inst_emul_report.append(inst)
 
 def make_report(msg):
     global is_report_flag, reported_msg_txt
@@ -238,36 +220,6 @@ def get_freed_info_for_addr(mem_addr):
 
 
 """
-call stack handler related task
-"""
-
-
-def process_call():
-    global call_stack
-    ret_addr = Triton.getConcreteMemoryValue(
-        MemoryAccess(Triton.getConcreteRegisterValue(Triton.registers.rsp),
-                     CPUSIZE.QWORD))
-    call_stack[threading.currentThread().ident].push(ret_addr)
-
-
-def process_ret(ret_addr):
-    global call_stack
-    if call_stack[threading.currentThread().ident].isEmpty():
-        print('[ERROR] policy notice the call stack is empty ... 0x%x' %
-              (ret_addr))
-    else:
-        o_ret_addr = Triton.getConcreteRegisterValue(Triton.registers.rip)
-        s_ret_addr = call_stack[threading.currentThread().ident].pop()
-
-        if (o_ret_addr and o_ret_addr != s_ret_addr):
-            msg = '[ERROR] policy receives an abnormalities in the call stack\ninstruction processing = ' + hex(
-                ret_addr) + '\nreceive by accessing RIP = ' + hex(
-                    o_ret_addr) + '\nshadow stack = ' + hex(s_ret_addr) + '\n'
-            if (not is_vul_reported(o_ret_addr)):
-                make_report(msg)
-
-
-"""
 program status handler related tasks
 """
 
@@ -306,16 +258,16 @@ def oob_uaf_policy(inst):
     for operand in operands:
         if operand.getType() == OPERAND.MEM:
             addr_start = operand.getAddress()
-            addr_end = addr_start + (operand.getBitSize() / 8)
+            addr_end = addr_start + (operand.getBitSize() / 8) - 0x1
 
             if (addr_start >= BASE_ALLOC
-                    and addr_end < BASE_ALLOC + current_heap_alloc):
+                    and addr_end < BASE_ALLOC + current_heap_alloc - 0x1):
                 isFlagged = True
                 alloc_start = 0
                 alloc_end = 0
                 for alloc_mem, alloc_size in heap_map.iteritems():
                     alloc_start = alloc_mem
-                    alloc_end = alloc_mem + alloc_size
+                    alloc_end = alloc_mem + alloc_size -0x1
                     if (addr_start >= alloc_start and addr_start <= alloc_end
                             and addr_end >= alloc_start
                             and addr_end <= alloc_end):
@@ -366,11 +318,6 @@ policy inspector
 
 def inspection(inst):
     inst_addr = inst.getAddress()
-
-    if (inst.getType() == OPCODE.X86.CALL):
-        process_call()
-    elif (inst.getType() == OPCODE.X86.RET):
-        process_ret(inst_addr)
 
     if (inst.getType() == OPCODE.X86.MOV or inst.getType() == OPCODE.X86.MOVSX or inst.getType() == OPCODE.X86.LEA):
         oob_uaf_policy(inst)
