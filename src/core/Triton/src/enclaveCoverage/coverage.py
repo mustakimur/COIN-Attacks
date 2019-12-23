@@ -424,7 +424,7 @@ calculate_memory_size(param_layout, paran_cnt) returns the required memory in by
 """
 
 
-def calculate_memory_size(param_layout, paran_cnt):
+def calculate_memory_size(param_layout):
     memory_size = 0
     par_cnt = 0
 
@@ -440,7 +440,7 @@ def calculate_memory_size(param_layout, paran_cnt):
             b = get_bytes(p_type)
             memory_size = cal_padding(memory_size, b)
 
-    return (memory_size * paran_cnt)
+    return memory_size
 
 
 """
@@ -503,12 +503,11 @@ def config_memory_for_param(fn_name, param_info, pc, init_seed_flag, is_ECALL):
             rel_param_val = Triton.getConcreteRegisterValue(
                 x86_arg_reg_seq[rel_param_pos])
 
-        max_param_mem_size = calculate_memory_size(
-            param_mem_layout, rel_param_val)
+        max_param_mem_size = rel_param_val
     elif param_is_string:
         max_param_mem_size = 100
     else:
-        max_param_mem_size = calculate_memory_size(param_mem_layout, 1)
+        max_param_mem_size = calculate_memory_size(param_mem_layout)
 
     if is_ECALL:
         param_cnt = 0
