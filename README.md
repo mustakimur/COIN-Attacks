@@ -56,17 +56,21 @@ COIN Attack
 |
 |--PoCs
        |
-       |--App
-             |
-             |--App.cpp
+       |--df_enclave
        |
-       |--Enclave
-                 |
-                 |--Enclave.edl
-                 |
-                 |--Enclave.cpp
+       |--hl_enclave
        |
-       |--Makefile
+       |--ho_enclave
+       |
+       |--ie_enclave
+       |
+       |--nd_enclave
+       |
+       |--sl_enclave
+       |
+       |--so_enclave
+       |
+       |--uaf_enclave
 ```
 
 ## Build

@@ -12,7 +12,7 @@ import copy
 import policies
 import threading
 
-MAX_SEED_ATTEMPT = 50
+MAX_SEED_ATTEMPT = 1000
 
 # DEBUG Flags
 STEP_DEBUG = False                      # CORE modules steps information
@@ -155,6 +155,8 @@ def sgx_free_hook(instruction):
         ) + ')\nOriginally allocated at ' + hex(policies.get_heap_mem_alloc_at(
             free_mem)) + '\nAllocation freed before at ' + hex(
             policies.get_freed_info_for_addr(free_mem)) + '\n'
+        if (not policies.is_vul_reported(pc)):
+            policies.make_report(msg)
 
     policies.set_thread_locked()
     force_return_to_callsite(0x0)
@@ -603,7 +605,7 @@ def hook_process_inst(instruction):
 
             DDoS[fn_name].append(pc)
 
-            if (DDoS[fn_name].count(pc) > 3):
+            if (DDoS[fn_name].count(pc) > 30):
                 if WARN_DEBUG:
                     msg = '[WARNING] a loop because of ocall is detected\nOCALL = ' + fn_name + ' at ' + hex(
                         pc) + '\n'

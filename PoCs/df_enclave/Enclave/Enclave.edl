@@ -1,0 +1,14 @@
+enclave {
+    from "sgx_tstdc.edl" import *;
+    include "../eType.h"
+    trusted {
+        public void ecall_set_password([in, string] char *password);
+        public void ecall_change_password([in, string] char *old_password, [in, string] char *new_password);
+    };
+    untrusted {
+        void ocall_print_string([in, string] char* msg);
+        void ocall_print_int(int out);
+        void ocall_load_password([out] char* buf);
+        void ocall_store_password([in, string] char *buf);
+    };
+};

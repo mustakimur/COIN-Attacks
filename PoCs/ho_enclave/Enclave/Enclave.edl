@@ -1,0 +1,10 @@
+enclave {
+    from "sgx_tstdc.edl" import *;
+    include "../eType.h"
+    trusted {
+        public void ecall_hob();
+    };
+    untrusted {
+        void ocall_readData([out] struct eData* data) ;
+    };
+};
