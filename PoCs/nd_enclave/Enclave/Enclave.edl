@@ -1,0 +1,10 @@
+enclave {
+    from "sgx_tstdc.edl" import *;
+    include "../eType.h"
+    trusted {
+        public void ecall_ask([in, string] char *in_msg, [out] char* out_msg);
+    };
+    untrusted {
+        void ocall_print_int(int n);
+    };
+};

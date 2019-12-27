@@ -2,6 +2,7 @@ from __future__ import print_function
 from triton import TritonContext, ARCH, MemoryAccess, CPUSIZE, Instruction, OPCODE, MODE, OPERAND, REG
 import threading
 import collections
+import ctypes
 
 MAX_INST_DELAY = 10
 BASE_ALLOC = 0x30000000
@@ -14,8 +15,7 @@ is_report_flag = False
 reported_msg_txt = ""
 reported_item = []
 # ring buffer of emulated instructions
-inst_emul_report = collections.deque(
-    maxlen=200)
+inst_emul_report = collections.deque(maxlen=200)
 
 # mapping register presenation of different size to their 64-bit register
 RegMap = {
@@ -45,7 +45,6 @@ RegMap = {
     REG.X86_64.RBP: REG.X86_64.RBP
 }
 
-
 heap_map = dict()
 heap_story = dict()
 thread_lock_track = dict()
@@ -54,7 +53,6 @@ mem_prev_status = dict()
 
 heap_alloc_base = BASE_ALLOC
 current_heap_alloc = 0
-
 """
 policy intialize related task
 """
@@ -112,11 +110,14 @@ def set_thread_locked():
 reporting related task handler
 """
 
+
 def get_inst_ring_buffer():
     return inst_emul_report
 
+
 def push_inst_to_ring_buffer(inst):
     inst_emul_report.append(inst)
+
 
 def make_report(msg):
     global is_report_flag, reported_msg_txt
@@ -244,7 +245,13 @@ policy handler related tasks
 """
 
 
-def is_heap_overflow(inst, dst_addr, src_addr, cpy_len, inst_addr):
+def is_nd_or_heap_overflow(inst, dst_addr, src_addr, cpy_len, inst_addr):
+    if (dst_addr == 0x0):
+        msg = '[ND-REPORT] Null pointer deference at 0x%x' % (
+            inst.getAddress())
+        if (not is_vul_reported(inst.getAddress())):
+            make_report(msg)
+        return
     dst_size = get_mem_range_for_addr(dst_addr)
     if dst_size != ERROR_CODE and dst_size < cpy_len:
         msg = '[HO-REPORT] Potential heap overflow at 0x%x\nDestination 0x%x allocated at 0x%x' % (
@@ -267,7 +274,7 @@ def oob_uaf_policy(inst):
                 alloc_end = 0
                 for alloc_mem, alloc_size in heap_map.iteritems():
                     alloc_start = alloc_mem
-                    alloc_end = alloc_mem + alloc_size -0x1
+                    alloc_end = alloc_mem + alloc_size - 0x1
                     if (addr_start >= alloc_start and addr_start <= alloc_end
                             and addr_end >= alloc_start
                             and addr_end <= alloc_end):
@@ -279,10 +286,10 @@ def oob_uaf_policy(inst):
                             and addr_end > alloc_end):
                         msg = '[ERROR] Potential Out of Bound (OOB) at ' + hex(
                             inst.getAddress()) + ': ' + inst.getDisassembly(
-                        ) + '\nTry to use memory at ' + hex(
+                            ) + '\nTry to use memory at ' + hex(
                                 addr_start) + ' - ' + hex(
                                     addr_end
-                        ) + '\nAllocated Memory range is ' + hex(
+                                ) + '\nAllocated Memory range is ' + hex(
                                     alloc_start) + ' - ' + hex(
                                         alloc_end) + '\n'
                     else:
@@ -300,15 +307,55 @@ def oob_uaf_policy(inst):
                                 ) + '\nTry to use memory at ' + hex(
                                     addr_start) + ' - ' + hex(
                                         addr_end
-                                ) + '\nAllocated memory range is ' + hex(
+                                    ) + '\nAllocated memory range is ' + hex(
                                         st_alloc_start) + ' - ' + hex(
                                             st_alloc_end
-                                ) + '\nAllocated memory at ' + hex(
+                                        ) + '\nAllocated memory at ' + hex(
                                             st_alloc_info[0]
-                                ) + ' and Freed at ' + hex(
+                                        ) + ' and Freed at ' + hex(
                                             st_alloc_info[2]) + '\n'
-                    if (not is_vul_reported(inst.getAddress())):
+                    if (msg != '' and not is_vul_reported(inst.getAddress())):
                         make_report(msg)
+
+
+def test_cmp_sides(inst):
+    limit = 20
+    is_ie = False
+    mov_inst = None
+    match_cnt = 0
+
+    if (inst.isSymbolized()):
+        instruction = Instruction()
+        match_cnt = 1
+
+        while (limit > 0 and match_cnt > 0):
+            pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
+            opcode = Triton.getConcreteMemoryAreaValue(pc, 16)
+            instruction.setOpcode(opcode)
+            instruction.setAddress(pc)
+            Triton.processing(instruction)
+
+            if (instruction.getType() == OPCODE.X86.MOV and match_cnt == 1):
+                operands = instruction.getOperands()
+
+                for operand in operands:
+                    if operand.getType() == OPERAND.IMM:
+                        imm = (operand.getValue() >> (32 - 1)) & 1
+                        if (imm == 1):
+                            match_cnt = 2
+                            limit = 10
+                            mov_inst = instruction
+            if (instruction.getType() == OPCODE.X86.JMP and match_cnt == 2):
+                is_ie = True
+                break
+            limit -= 1
+
+    if (is_ie):
+        msg = '[IE-REPORT] Potential ineffectual conditional statement at ' + hex(
+            inst.getAddress()) + '\nThe Error code is at ' + hex(
+                mov_inst.getAddress())
+        if (not is_vul_reported(inst.getAddress())):
+            make_report(msg)
 
 
 """
@@ -319,8 +366,12 @@ policy inspector
 def inspection(inst):
     inst_addr = inst.getAddress()
 
-    if (inst.getType() == OPCODE.X86.MOV or inst.getType() == OPCODE.X86.MOVSX or inst.getType() == OPCODE.X86.LEA):
+    if (inst.getType() == OPCODE.X86.MOV or inst.getType() == OPCODE.X86.MOVSX
+            or inst.getType() == OPCODE.X86.LEA):
         oob_uaf_policy(inst)
+
+    if (inst.getType() == OPCODE.X86.CMP):
+        test_cmp_sides(inst)
 
     update_prog_stats(inst)
 

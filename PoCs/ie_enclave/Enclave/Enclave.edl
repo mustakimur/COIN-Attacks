@@ -1,0 +1,12 @@
+enclave {
+    from "sgx_tstdc.edl" import *;
+    include "../eType.h"
+    trusted {
+        public void ecall_compare([in, size=size] struct eData* est, int size);
+    };
+    untrusted {
+        void ocall_print_string([in, string] char *msg);
+        void ocall_print_int(int code);
+        void ocall_pdt([out, size=size] struct eData* pdt, int size);
+    };
+};
