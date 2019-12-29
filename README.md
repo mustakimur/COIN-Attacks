@@ -146,7 +146,7 @@ sudo apt-get install python-pip libcapstone-dev libboost-all-dev libz3-dev
 ```
 1. Python LIEF library install.
 ```
-sudo pip install lief
+sudo pip install lief==0.9.0
 ```
 2. Build z3 solver from the source:
 ```

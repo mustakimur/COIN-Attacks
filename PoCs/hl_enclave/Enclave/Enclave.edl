@@ -1,0 +1,10 @@
+enclave {
+    from "sgx_tstdc.edl" import *;
+    include "../eType.h"
+    trusted {
+        public void ecall_heap_leak([in] struct eData *data);
+    };
+    untrusted {
+        int ocall_write_out([in, size=left] char* buf, int left);
+    };
+};

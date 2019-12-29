@@ -245,6 +245,20 @@ policy handler related tasks
 """
 
 
+def test_stack_leak(inst, dst_addr, src_addr, cpy_len, inst_addr):
+    mov_len = inst_emul_report[len(inst_emul_report)-2]
+    for op in mov_len.getOperands():
+        if op.getType() == OPERAND.MEM:
+            if(Triton.getSymbolicMemory(op.getAddress())):
+                dst_range = get_mem_range_for_addr(dst_addr)
+                src_range = get_mem_range_for_addr(src_addr)
+                if(dst_range != ERROR_CODE and src_range == ERROR_CODE):
+                    msg = '[SL-REPORT] potential stack memory leak at 0x%x for stack memory at 0x%x' % (
+                        inst.getAddress(), src_addr)
+                    if (not is_vul_reported(inst.getAddress())):
+                        make_report(msg)
+
+
 def is_nd_or_heap_overflow(inst, dst_addr, src_addr, cpy_len, inst_addr):
     if (dst_addr == 0x0):
         msg = '[ND-REPORT] Null pointer deference at 0x%x' % (
@@ -286,10 +300,10 @@ def oob_uaf_policy(inst):
                             and addr_end > alloc_end):
                         msg = '[ERROR] Potential Out of Bound (OOB) at ' + hex(
                             inst.getAddress()) + ': ' + inst.getDisassembly(
-                            ) + '\nTry to use memory at ' + hex(
+                        ) + '\nTry to use memory at ' + hex(
                                 addr_start) + ' - ' + hex(
                                     addr_end
-                                ) + '\nAllocated Memory range is ' + hex(
+                        ) + '\nAllocated Memory range is ' + hex(
                                     alloc_start) + ' - ' + hex(
                                         alloc_end) + '\n'
                     else:
@@ -307,12 +321,12 @@ def oob_uaf_policy(inst):
                                 ) + '\nTry to use memory at ' + hex(
                                     addr_start) + ' - ' + hex(
                                         addr_end
-                                    ) + '\nAllocated memory range is ' + hex(
+                                ) + '\nAllocated memory range is ' + hex(
                                         st_alloc_start) + ' - ' + hex(
                                             st_alloc_end
-                                        ) + '\nAllocated memory at ' + hex(
+                                ) + '\nAllocated memory at ' + hex(
                                             st_alloc_info[0]
-                                        ) + ' and Freed at ' + hex(
+                                ) + ' and Freed at ' + hex(
                                             st_alloc_info[2]) + '\n'
                     if (msg != '' and not is_vul_reported(inst.getAddress())):
                         make_report(msg)

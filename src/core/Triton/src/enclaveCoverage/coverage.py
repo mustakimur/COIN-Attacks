@@ -155,7 +155,7 @@ def sgx_free_hook(instruction):
         msg = '[DF-REPORT] Potential double free at ' + hex(
             pc) + '\nTrying to free memory (' + hex(free_mem) + ' - ' + hex(
                 free_mem + policies.get_mem_size_at_addr(free_mem)
-            ) + ')\nOriginally allocated at ' + hex(
+        ) + ')\nOriginally allocated at ' + hex(
                 policies.get_heap_mem_alloc_at(
                     free_mem)) + '\nAllocation freed before at ' + hex(
                         policies.get_freed_info_for_addr(free_mem)) + '\n'
@@ -171,6 +171,9 @@ def sgx_memcpy(instruction):
     src_mem_addr = Triton.getConcreteRegisterValue(Triton.registers.rsi)
     mem_cpy_len = Triton.getConcreteRegisterValue(Triton.registers.rdx)
     pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
+
+    policies.test_stack_leak(instruction, dest_mem_addr, src_mem_addr,
+                             mem_cpy_len, pc)
 
     policies.is_nd_or_heap_overflow(instruction, dest_mem_addr, src_mem_addr,
                                     mem_cpy_len, pc)

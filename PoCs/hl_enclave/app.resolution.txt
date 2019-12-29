@@ -1,0 +1,17 @@
+App/Enclave_u.o
+-r=App/Enclave_u.o,ecall_heap_leak,pl
+-r=App/Enclave_u.o,sgx_ecall,
+-r=App/Enclave_u.o,ocall_write_out,l
+-r=App/Enclave_u.o,sgx_oc_cpuidex,
+-r=App/Enclave_u.o,sgx_thread_wait_untrusted_event_ocall,
+-r=App/Enclave_u.o,sgx_thread_set_untrusted_event_ocall,
+-r=App/Enclave_u.o,sgx_thread_setwait_untrusted_events_ocall,
+-r=App/Enclave_u.o,sgx_thread_set_multiple_untrusted_events_ocall,
+App/App.o
+-r=App/App.o,ocall_write_out,pl
+-r=App/App.o,printf,
+-r=App/App.o,main,plx
+-r=App/App.o,sgx_create_enclave,
+-r=App/App.o,malloc,
+-r=App/App.o,ecall_heap_leak,l
+-r=App/App.o,sgx_destroy_enclave,
