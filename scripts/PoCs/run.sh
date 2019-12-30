@@ -1,9 +1,9 @@
-export PROJECT_ROOT=/home/mustakim/COIN/asplos_COIN
-source /opt/intel/sgxsdk/environment
+export PROJECT_ROOT="$PWD""/../../"
+export LLVM_BUILD="$PROJECT_ROOT/src/semantics/llvm_src/build"
+export SEMANTICS_DIR="$PROJECT_ROOT/src/semantics/pyedl"
+export SYMEMU="$PROJECT_ROOT/src/core/Triton/src/enclaveCoverage"
 
-LLVM_BUILD="$PROJECT_ROOT/coin_project/llvm-project/build"
-SEMANTICS_DIR="$PROJECT_ROOT/coin_project/semantic"
-SYMEMU="$PROJECT_ROOT/coin_project/core/Triton/src/enclaveCoverage"
+source /opt/intel/sgxsdk/environment
 
 # micro-benchmark
 UAF_SRC="$PROJECT_ROOT/PoCs/uaf_enclave"
