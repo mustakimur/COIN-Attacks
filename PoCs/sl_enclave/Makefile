@@ -36,8 +36,8 @@ SGX_MODE = HW
 SGX_ARCH = x64
 SGX_DEBUG = 1
 
-CC=$(LLVM_BUILD)/clang -Xclang -disable-O0-optnone -flto -std=gnu89 -D_GNU_SOURCE -O0 -g -fpermissive -Wno-return-type
-CXX=$(LLVM_BUILD)/clang++ -Xclang -disable-O0-optnone -flto -std=c++03 -O0 -g -D_GNU_SOURCE -fpermissive -Wno-return-type
+CC=$(LLVM_BUILD)/bin/clang -Xclang -disable-O0-optnone -flto -std=gnu89 -D_GNU_SOURCE -O0 -g -fpermissive -Wno-return-type
+CXX=$(LLVM_BUILD)/bin/clang++ -Xclang -disable-O0-optnone -flto -std=c++03 -O0 -g -D_GNU_SOURCE -fpermissive -Wno-return-type
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
