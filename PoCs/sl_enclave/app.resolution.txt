@@ -13,5 +13,6 @@ App/App.o
 -r=App/App.o,main,plx
 -r=App/App.o,sgx_create_enclave,
 -r=App/App.o,printf,
+-r=App/App.o,malloc,
 -r=App/App.o,ecall_start,l
 -r=App/App.o,sgx_destroy_enclave,

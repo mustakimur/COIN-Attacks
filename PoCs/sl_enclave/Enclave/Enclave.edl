@@ -2,7 +2,7 @@ enclave {
     from "sgx_tstdc.edl" import *;
     include "../eType.h"
     trusted {
-        public void ecall_start();
+        public void ecall_start([out] struct eData* cdata, [out] struct eData* vdata);
     };
     untrusted {
         void ocall_ask([out, size=size] char* in_msg, int size, [out] int* in_msg_len);

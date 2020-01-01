@@ -34,7 +34,10 @@ int main()
     return -1;
   }
 
-  ret = ecall_start(eid);
+  struct eData *vdata = (struct eData*) malloc(sizeof(struct eData));
+  struct eData *cdata = (struct eData*) malloc(sizeof(struct eData));
+
+  ret = ecall_start(eid, cdata, vdata);
   if (ret != SGX_SUCCESS)
   {
     printf("Error: Making an ecall_hob()\n");

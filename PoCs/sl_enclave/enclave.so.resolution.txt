@@ -10,7 +10,10 @@ Enclave/Enclave_t.o
 -r=Enclave/Enclave_t.o,sgx_thread_set_untrusted_event_ocall,pl
 -r=Enclave/Enclave_t.o,sgx_thread_setwait_untrusted_events_ocall,pl
 -r=Enclave/Enclave_t.o,sgx_thread_set_multiple_untrusted_events_ocall,pl
+-r=Enclave/Enclave_t.o,sgx_is_outside_enclave,l
+-r=Enclave/Enclave_t.o,malloc,l
 -r=Enclave/Enclave_t.o,ecall_start,l
+-r=Enclave/Enclave_t.o,free,l
 -r=Enclave/Enclave_t.o,g_ecall_table,plx
 -r=Enclave/Enclave_t.o,g_dyn_entry_table,plx
 Enclave/Enclave.o
