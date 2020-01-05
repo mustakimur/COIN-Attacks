@@ -12,7 +12,7 @@ SO_SRC="$PROJECT_ROOT/PoCs/so_enclave"
 HO_SRC="$PROJECT_ROOT/PoCs/ho_enclave"
 SL_SRC="$PROJECT_ROOT/PoCs/sl_enclave"
 HL_SRC="$PROJECT_ROOT/PoCs/hl_enclave"
-IC_SRC="$PROJECT_ROOT/PoCs/ic_enclave"
+IE_SRC="$PROJECT_ROOT/PoCs/ie_enclave"
 ND_SRC="$PROJECT_ROOT/PoCs/nd_enclave"
 
 printf "Select your benchmark:\n1)use-after-free\n2)double-free\n3)stack overflow\n4)heap overflow\n5)stack memory leak\n6)heap memory leak\n7)null pointer dereference\n8)ineffectual condition\n"
@@ -41,7 +41,7 @@ then
 	PROJECT_DIR=$ND_SRC
 elif [ $choice -eq 8 ]
 then
-	PROJECT_DIR=$IC_SRC
+	PROJECT_DIR=$IE_SRC
 else
 	echo "Wrong choice."
 	exit 1

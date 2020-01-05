@@ -408,9 +408,14 @@ def cal_padding(mem_allocated, mem_alloc_req):
     if (mem_alloc_req == 8):
         mem_allocated += 0 if (mem_allocated % 8) == 0 else (
             8 - (mem_allocated % 8))
-    else:
+    elif (mem_alloc_req == 4):
         mem_allocated += 0 if (mem_allocated % 4) == 0 else (
             4 - (mem_allocated % 4))
+    elif (mem_alloc_req == 2):
+        mem_allocated += 0 if (mem_allocated % 4) == 0 else (
+            2 - (mem_allocated % 2))
+    else:
+        mem_allocated += 0
 
     mem_allocated += mem_alloc_req
 

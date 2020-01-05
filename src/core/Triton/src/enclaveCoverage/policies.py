@@ -347,7 +347,15 @@ def test_cmp_sides(inst):
             opcode = Triton.getConcreteMemoryAreaValue(pc, 16)
             instruction.setOpcode(opcode)
             instruction.setAddress(pc)
-            Triton.processing(instruction)
+
+            try:
+                ret = Triton.processing(instruction)
+
+                if not ret:
+                    Triton.setConcreteRegisterValue(Triton.registers.rip,
+                                                    instruction.getNextAddress())
+            except:
+                break
 
             if (instruction.getType() == OPCODE.X86.MOV and match_cnt == 1):
                 operands = instruction.getOperands()

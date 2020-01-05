@@ -105,6 +105,7 @@ make
 ```text
 cd $PROJECT_ROOT/src/semantics/llvm_src/
 mkdir build
+cd build
 cmake -DLLVM_ENABLE_PROJECTS=clang -DLLVM_BINUTILS_INCDIR="path_to_binutils/include" -G "Unix Makefiles" ../llvm
 make -j8
 ```
