@@ -98,10 +98,9 @@ req_allocate_memory(req_memory_size) allocates req_memory_size in enclave heap m
 """
 
 
-def req_allocate_memory(req_memory_size):
+def req_allocate_memory(req_memory_size, pc):
     alloc_addr = policies.get_allocated_mem_addr()
     policies.update_heap_mem_map(alloc_addr, req_memory_size)
-    pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
     policies.update_heap_mem_history(alloc_addr, req_memory_size, pc, None)
     if MEMORY_DEBUG:
         print('[MEMORY] allocating %d bytes of heap memory at 0x%x' %
@@ -127,7 +126,7 @@ sgx_malloc_hook() extracts the requested allocation size from rdi register, proc
 
 def sgx_malloc_hook(instruction):
     req_memory_size = Triton.getConcreteRegisterValue(Triton.registers.rdi)
-    allocated_addr = req_allocate_memory(req_memory_size)
+    allocated_addr = req_allocate_memory(req_memory_size, instruction.getAddress())
     force_return_to_callsite(allocated_addr)
 
 
@@ -144,14 +143,14 @@ def sgx_free_hook(instruction):
             print('[MEMORY] free %d bytes of memory at 0x%x' %
                   (policies.get_mem_range_for_addr(free_mem), free_mem))
 
-        pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
+        pc = instruction.getAddress()
         policies.update_heap_mem_history(
             free_mem, policies.get_mem_size_at_addr(free_mem),
             policies.get_heap_mem_alloc_at(free_mem), pc)
 
         policies.remove_mem_entry(free_mem)
     else:
-        pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
+        pc = instruction.getAddress()
         msg = '[DF-REPORT] Potential double free at ' + hex(
             pc) + '\nTrying to free memory (' + hex(free_mem) + ' - ' + hex(
                 free_mem + policies.get_mem_size_at_addr(free_mem)
@@ -462,14 +461,15 @@ set_memory_value(fn_name, param_pos, param_size, param_reg_addr, init_seed_flag)
 
 def set_memory_value(fn_name, param_pos, i_cnt, pc, param_size, param_reg_addr,
                      init_seed_flag, param_is_string):
+    #print('[TAG_3] param_size = ' + str(param_size) + '\tparam_reg_addr = ' + hex(param_reg_addr))
     if init_seed_flag:
         data = []
         if param_is_string:
             for d in range(0, param_size - 1):
-                seed_mem_layout[param_reg_addr + d] = 0x68
-                data.append(0x68)
-            seed_mem_layout[param_reg_addr + param_size] = 0x0a
-            data.append(0x0a)
+                seed_mem_layout[param_reg_addr + d] = 0xff
+                data.append(0xff)
+            seed_mem_layout[param_reg_addr + param_size] = 0x0
+            data.append(0x0)
         else:
             for d in range(0, param_size):
                 seed_mem_layout[param_reg_addr + d] = 0x0
@@ -480,6 +480,8 @@ def set_memory_value(fn_name, param_pos, i_cnt, pc, param_size, param_reg_addr,
         for d in range(0, param_size):
             if ((sym_addr + d) in seed_mem_layout):
                 data.append(seed_mem_layout[sym_addr + d])
+
+    #print('[TAG_4] Set data = ', data)
 
     fn_param_seed_map[(fn_name, param_pos, i_cnt, pc)] = param_reg_addr
 
@@ -518,22 +520,24 @@ def config_memory_for_param(fn_name, param_info, pc, init_seed_flag, is_ECALL):
 
         max_param_mem_size = rel_param_val
     elif param_is_string:
-        max_param_mem_size = 100
+        max_param_mem_size = 50
     else:
         max_param_mem_size = calculate_memory_size(param_mem_layout)
 
     if is_ECALL:
         param_cnt = 0
         param_reg_addr = 0
-        org_param_reg_addr = 0
+        #org_param_reg_addr = 0
         for param in param_mem_layout:
             if param_cnt == 0 and param == POINTER_TY:
-                param_reg_addr = req_allocate_memory(max_param_mem_size)
-                org_param_reg_addr = param_reg_addr
-                #print('[SET] Pointer memory at 0x%x of size %d' %(param_reg_addr, max_param_mem_size))
+                param_reg_addr = req_allocate_memory(max_param_mem_size, pc)
+                #org_param_reg_addr = param_reg_addr
                 Triton.setConcreteRegisterValue(x64_arg_reg_seq[param_pos],
                                                 param_reg_addr)
+
+                #print('[TAG_1] param_cnt = ' + str(param_cnt) + '\tparam = ' + param + '\tparam_reg_addr = ' + hex(param_reg_addr))
             elif param_cnt > 0:
+                #print('[TAG_2] param_cnt = ' + str(param_cnt) + '\tparam = ' + param)
                 param_reg_addr = set_memory_value(
                     fn_name, param_pos, param_cnt, pc, max_param_mem_size
                     if param_is_string else get_bytes(param), param_reg_addr,
@@ -794,6 +798,8 @@ def run_single_thread_emul(perm_ECALLs_list):
                                                 True)
 
                 res = emulate(it_ECALL_addr, sgx_ocall, sgx_ofree, False)
+
+                #print('[TAG_5] back from emulation ...')
 
                 inst_count += res
 

@@ -10,6 +10,10 @@ ERROR_CODE = -400
 
 Triton = None
 
+cmp_next_counter = 0
+cmp_match_cnt = 0
+cmp_mov_inst = None
+
 # report container
 is_report_flag = False
 reported_msg_txt = ""
@@ -332,52 +336,43 @@ def oob_uaf_policy(inst):
                         make_report(msg)
 
 
-def test_cmp_sides(inst):
-    limit = 20
+def test_cmp_sides(inst, flag):
+    global cmp_next_counter, cmp_match_cnt, cmp_mov_inst
+
     is_ie = False
-    mov_inst = None
-    match_cnt = 0
+    if (flag and inst.isSymbolized()):
+        cmp_next_counter = 20
+        cmp_match_cnt = 1
+    elif(not flag and cmp_match_cnt > 0):
+        if (inst.getType() == OPCODE.X86.MOV and cmp_match_cnt == 1):
+            operands = inst.getOperands()
 
-    if (inst.isSymbolized()):
-        instruction = Instruction()
-        match_cnt = 1
+            for operand in operands:
+                if operand.getType() == OPERAND.IMM:
+                    imm = (operand.getValue() >> (32 - 1)) & 1
+                    if (imm == 1):
+                        cmp_match_cnt = 2
+                        cmp_next_counter = 10
+                        cmp_mov_inst = inst
 
-        while (limit > 0 and match_cnt > 0):
-            pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
-            opcode = Triton.getConcreteMemoryAreaValue(pc, 16)
-            instruction.setOpcode(opcode)
-            instruction.setAddress(pc)
-
-            try:
-                ret = Triton.processing(instruction)
-
-                if not ret:
-                    Triton.setConcreteRegisterValue(Triton.registers.rip,
-                                                    instruction.getNextAddress())
-            except:
-                break
-
-            if (instruction.getType() == OPCODE.X86.MOV and match_cnt == 1):
-                operands = instruction.getOperands()
-
-                for operand in operands:
-                    if operand.getType() == OPERAND.IMM:
-                        imm = (operand.getValue() >> (32 - 1)) & 1
-                        if (imm == 1):
-                            match_cnt = 2
-                            limit = 10
-                            mov_inst = instruction
-            if (instruction.getType() == OPCODE.X86.JMP and match_cnt == 2):
-                is_ie = True
-                break
-            limit -= 1
+        if (inst.getType() == OPCODE.X86.JMP and cmp_match_cnt == 2):
+            is_ie = True
+        
+        if (inst.getType() == OPCODE.X86.CALL):
+            cmp_next_counter = 0
+        cmp_next_counter -= 1
 
     if (is_ie):
         msg = '[IE-REPORT] Potential ineffectual conditional statement at ' + hex(
             inst.getAddress()) + '\nThe Error code is at ' + hex(
-                mov_inst.getAddress())
+                cmp_mov_inst.getAddress())
         if (not is_vul_reported(inst.getAddress())):
             make_report(msg)
+
+    if (cmp_next_counter <= 0 or is_ie):
+        cmp_mov_inst = None
+        cmp_match_cnt = 0
+        cmp_next_counter = 0
 
 
 """
@@ -386,14 +381,14 @@ policy inspector
 
 
 def inspection(inst):
-    inst_addr = inst.getAddress()
-
     if (inst.getType() == OPCODE.X86.MOV or inst.getType() == OPCODE.X86.MOVSX
             or inst.getType() == OPCODE.X86.LEA):
         oob_uaf_policy(inst)
 
     if (inst.getType() == OPCODE.X86.CMP):
-        test_cmp_sides(inst)
+        test_cmp_sides(inst, True)
+    elif(cmp_next_counter > 0):
+        test_cmp_sides(inst, False)
 
     update_prog_stats(inst)
 
