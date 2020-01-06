@@ -374,6 +374,71 @@ void ecall_change_password(char *old_password, char *new_password) {
 We could see that to trigger the double free, the attacker first need to satisfy `if (strcmp(old_password, load_password) == 0) {` where `load_password` is a malicious input from OCALL `ocall_load_password`. Then it also needs to fail the following: `if (new_password[0] >= '0' && new_password[0] <= '9')` so, now the process will execute two free request for `load_password`.
 
 ### Stack Overflow
+The report would like following:
+
+```
+[EMULATION] attempted sequence:  ('ecall_process', 'ecall_process')
+[SO-REPORT] auto generated warning for __stack_chk_fail from 0xb97
+
+Recent 200 emulated instructions: 
+0xb58: mov rcx, qword ptr [rbp - 0x30]
+0xb5c: cmp rcx, rax
+0xb5f: jae 0xb7f
+0xb61: mov rax, qword ptr [rbp - 0x20]
+0xb65: movsxd rcx, dword ptr [rbp - 0x28]
+...
+0xb7f: mov rax, qword ptr fs:[0x28]
+0xb88: mov rcx, qword ptr [rbp - 8]
+0xb8c: cmp rax, rcx
+0xb8f: jne 0xb97
+0xb97: call 0x451f
+Seed information: 
+0x30000000 [ 0xff ]  0x30000001 [ 0xff ]  0x30000002 [ 0xff ]
+...
+```
+
+The stack overflow policy uses the simplest method to trigger the report. The compiler auto gererate a call to `__stack_chk_fail` if return of a function get overwritten. So, the policy just detects it and show from where the warning triggered i.e. in this case instruction address `0xb97`.
+
+The `objdump` show us following:
+
+```
+0000000000000b10 <_Z18local_copy_and_sumPci>:
+     b10:	55                   	push   rbp
+     b11:	48 89 e5             	mov    rbp,rsp
+     b14:	48 83 ec 30          	sub    rsp,0x30
+     b18:	64 48 8b 04 25 28 00 	mov    rax,QWORD PTR fs:0x28
+     b1f:	00 00 
+     b21:	48 89 45 f8          	mov    QWORD PTR [rbp-0x8],rax
+     b25:	48 89 7d e0          	mov    QWORD PTR [rbp-0x20],rdi
+     b29:	89 75 dc             	mov    DWORD PTR [rbp-0x24],esi
+     b2c:	83 7d dc 0a          	cmp    DWORD PTR [rbp-0x24],0xa
+     ...
+     b88:	48 8b 4d f8          	mov    rcx,QWORD PTR [rbp-0x8]
+     b8c:	48 39 c8             	cmp    rax,rcx
+     b8f:	75 06                	jne    b97 <_Z18local_copy_and_sumPci+0x87>
+     b91:	48 83 c4 30          	add    rsp,0x30
+     b95:	5d                   	pop    rbp
+     b96:	c3                   	ret    
+     b97:	e8 83 39 00 00       	call   451f <__stack_chk_fail>
+```
+
+and `c++filt _Z18local_copy_and_sumPci` gives us `local_copy_and_sum(char*, int)`. So, the function `local_copy_and_sum` has a stack overflow. The function is source:
+
+```c++
+void local_copy_and_sum(char *arr, int num){
+  // char *arr in user control through ECALL param
+  char buf[10];
+  // the error check is with user-defined int
+  if(num > 10){
+    ocall_print_string("Throw error.");
+    return;
+  }
+  // but the iteration controls by strlen()
+  for(int i = 0; i < strlen(arr); i++){
+    buf[i]= arr[i];  // stack overflow
+  }
+}
+```
 
 ### Heap Overflow
 
