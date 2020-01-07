@@ -18,6 +18,8 @@ ND_SRC="$PROJECT_ROOT/PoCs/nd_enclave"
 printf "Select your benchmark:\n1)use-after-free\n2)double-free\n3)stack overflow\n4)heap overflow\n5)stack memory leak\n6)heap memory leak\n7)null pointer dereference\n8)ineffectual condition\n"
 read choice
 
+max_seed=500
+
 if [ $choice -eq 1 ]
 then
 	PROJECT_DIR=$UAF_SRC
@@ -42,6 +44,7 @@ then
 elif [ $choice -eq 8 ]
 then
 	PROJECT_DIR=$IE_SRC
+	max_seed = 1000
 else
 	echo "Wrong choice."
 	exit 1
@@ -55,4 +58,4 @@ cd "$OLDPWD"
 python "$SEMANTICS_DIR/edlParse.py" "$PROJECT_DIR/Enclave/Enclave.edl"
 "$LLVM_BUILD/bin/opt" -load "$LLVM_BUILD/lib/LLVMEnclaveSemantic.so" -EnclaveSemantic  < "$PROJECT_DIR/enclave.so.0.4.opt.bc"
 
-python "$SYMEMU/coverage.py" "$PROJECT_DIR/enclave.so" unsafe_input_complete.tmp unsafe_ecall_stat.tmp 500 1000000 > "coin_report$choice"
+python "$SYMEMU/coverage.py" "$PROJECT_DIR/enclave.so" unsafe_input_complete.tmp unsafe_ecall_stat.tmp $max_seed 1000000 > "coin_report$choice"
