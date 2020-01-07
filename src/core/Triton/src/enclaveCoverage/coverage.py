@@ -688,7 +688,11 @@ def emulate(pc, sgx_ocall, sgx_free, is_threaded):
         except:
             if WARN_DEBUG:
                 print('[EXCEPTION] instruction process error ...')
-            break
+            if('\xf3\x0f\x1e\xfa' in opcode):
+                Triton.setConcreteRegisterValue(Triton.registers.rip,
+                                                pc + 0x4)
+            else:
+                break
 
         count += 1
 
