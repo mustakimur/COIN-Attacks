@@ -55,4 +55,4 @@ cd "$OLDPWD"
 python "$SEMANTICS_DIR/edlParse.py" "$PROJECT_DIR/Enclave/Enclave.edl"
 "$LLVM_BUILD/bin/opt" -load "$LLVM_BUILD/lib/LLVMEnclaveSemantic.so" -EnclaveSemantic  < "$PROJECT_DIR/enclave.so.0.4.opt.bc"
 
-python "$SYMEMU/coverage.py" "$PROJECT_DIR/enclave.so" unsafe_input_complete.tmp unsafe_ecall_stat.tmp > "coin_report$choice"
+python "$SYMEMU/coverage.py" "$PROJECT_DIR/enclave.so" unsafe_input_complete.tmp unsafe_ecall_stat.tmp 500 1000000 > "coin_report$choice"

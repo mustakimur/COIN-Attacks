@@ -11,8 +11,7 @@ import base64
 import copy
 import policies
 import threading
-
-MAX_SEED_ATTEMPT = 1000
+import gc
 
 # DEBUG Flags
 STEP_DEBUG = False  # CORE modules steps information
@@ -126,7 +125,8 @@ sgx_malloc_hook() extracts the requested allocation size from rdi register, proc
 
 def sgx_malloc_hook(instruction):
     req_memory_size = Triton.getConcreteRegisterValue(Triton.registers.rdi)
-    allocated_addr = req_allocate_memory(req_memory_size, instruction.getAddress())
+    allocated_addr = req_allocate_memory(
+        req_memory_size, instruction.getAddress())
     force_return_to_callsite(allocated_addr)
 
 
@@ -380,7 +380,7 @@ def force_return_to_callsite(ret_rax_val):
         Triton.registers.rsp,
         Triton.getConcreteRegisterValue(Triton.registers.rsp) + CPUSIZE.QWORD)
 
-    if EMUL_DEBUG:
+    if PRINT_INST_DEBUG:
         print('[EMULATION] force to return at 0x%x ...' %
               (Triton.getConcreteRegisterValue(Triton.registers.rip)))
 
@@ -461,7 +461,6 @@ set_memory_value(fn_name, param_pos, param_size, param_reg_addr, init_seed_flag)
 
 def set_memory_value(fn_name, param_pos, i_cnt, pc, param_size, param_reg_addr,
                      init_seed_flag, param_is_string):
-    #print('[TAG_3] param_size = ' + str(param_size) + '\tparam_reg_addr = ' + hex(param_reg_addr))
     if init_seed_flag:
         data = []
         if param_is_string:
@@ -480,8 +479,6 @@ def set_memory_value(fn_name, param_pos, i_cnt, pc, param_size, param_reg_addr,
         for d in range(0, param_size):
             if ((sym_addr + d) in seed_mem_layout):
                 data.append(seed_mem_layout[sym_addr + d])
-
-    #print('[TAG_4] Set data = ', data)
 
     fn_param_seed_map[(fn_name, param_pos, i_cnt, pc)] = param_reg_addr
 
@@ -535,9 +532,7 @@ def config_memory_for_param(fn_name, param_info, pc, init_seed_flag, is_ECALL):
                 Triton.setConcreteRegisterValue(x64_arg_reg_seq[param_pos],
                                                 param_reg_addr)
 
-                #print('[TAG_1] param_cnt = ' + str(param_cnt) + '\tparam = ' + param + '\tparam_reg_addr = ' + hex(param_reg_addr))
             elif param_cnt > 0:
-                #print('[TAG_2] param_cnt = ' + str(param_cnt) + '\tparam = ' + param)
                 param_reg_addr = set_memory_value(
                     fn_name, param_pos, param_cnt, pc, max_param_mem_size
                     if param_is_string else get_bytes(param), param_reg_addr,
@@ -607,7 +602,7 @@ def hook_process_inst(instruction):
     for sgx_warn_fn, sgx_warn_fn_addr in sgx_warn_tag.iteritems():
         if (sgx_warn_fn_addr == pc):
             msg = '[SO-REPORT] auto generated warning for ' + sgx_warn_fn + ' from ' + hex(
-                pc) + '\n'
+                instruction.getAddress()) + '\n'
             if (not policies.is_vul_reported(pc)):
                 policies.make_report(msg)
             force_return_to_callsite(0x0)
@@ -616,7 +611,7 @@ def hook_process_inst(instruction):
     for interface_fn in interface_hook_fn:
         fn_name = interface_fn[0]
         if interface_fn[1] == pc:
-            if EMUL_DEBUG:
+            if PRINT_INST_DEBUG:
                 print('[EMULATION] interface hook to %s at %x' % (fn_name, pc))
 
             if (not fn_name in DDoS):
@@ -670,7 +665,7 @@ def emulate(pc, sgx_ocall, sgx_free, is_threaded):
     count = 0
     policies.init_emulator()
     policies.init_thread_env()
-    while pc:
+    while pc and count < MAX_INST_CNT:
         if (not policies.is_thread_unlocked()):
             continue
         if is_threaded:
@@ -737,10 +732,13 @@ def emulate(pc, sgx_ocall, sgx_free, is_threaded):
             break
 
         pc = Triton.getConcreteRegisterValue(Triton.registers.rip)
-        prev_instruction = instruction
+        del instruction
 
         if is_threaded:
             emul_thread_lock.release()
+
+        if (count % 10000 == 0):
+            gc.collect()
 
     policies.exit_emulator()
     policies.destroy_thread_env()
@@ -799,8 +797,6 @@ def run_single_thread_emul(perm_ECALLs_list):
 
                 res = emulate(it_ECALL_addr, sgx_ocall, sgx_ofree, False)
 
-                #print('[TAG_5] back from emulation ...')
-
                 inst_count += res
 
             if EMUL_DEBUG:
@@ -821,15 +817,16 @@ def run_single_thread_emul(perm_ECALLs_list):
             temp_seed = copy.deepcopy(seed_mem_layout)
             latest_seed.append(temp_seed)
 
-            new_seeds = query_new_seed()
+            if (len(seed_worklist) < MAX_SEED_ATTEMPT):
+                new_seeds = query_new_seed()
 
-            new_seeds_len = len(seed_worklist)
-            for seeds in new_seeds:
-                if seeds not in latest_seed and seeds not in seed_worklist:
-                    seed_worklist += [dict(seeds)]
-            if SYM_DEBUG:
-                print('[SYMBOLIC] number of new input sets %d' %
-                      (len(seed_worklist) - new_seeds_len))
+                new_seeds_len = len(seed_worklist)
+                for seeds in new_seeds:
+                    if seeds not in latest_seed and seeds not in seed_worklist:
+                        seed_worklist += [dict(seeds)]
+                if SYM_DEBUG:
+                    print('[SYMBOLIC] number of new input sets %d' %
+                          (len(seed_worklist) - new_seeds_len))
 
             del seed_worklist[seed_cnt]
 
@@ -959,11 +956,15 @@ def run_concurrent_emul(list_ECALLs):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
+    global MAX_SEED_ATTEMPT, MAX_INST_CNT
+    if len(sys.argv) < 6:
         debug(
-            'Syntax: %s <elf binary> <unsafe_input_complete.tmp> <unsafe_ecall_stat.tmp>'
+            'Syntax: %s <elf binary> <unsafe_input_complete.tmp> <unsafe_ecall_stat.tmp> <max_seed_attempt> <max_inst_cnt>'
             % (sys.argv[0]))
         sys.exit(1)
+
+    MAX_SEED_ATTEMPT = int(sys.argv[4], 10)
+    MAX_INST_CNT = int(sys.argv[5], 10)
 
     if STEP_DEBUG:
         print('[CORE] loading the enclave shared object ...')

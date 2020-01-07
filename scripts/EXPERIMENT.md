@@ -443,3 +443,93 @@ void local_copy_and_sum(char *arr, int num){
 ### Heap Overflow
 
 ### Heap Memory Leak
+
+
+### SGX_SQLite
+To experiment the SGX_SQLite project:
+
+```
+cd $PROJECT_ROOT/scripts/SGX_SQLite
+./run.sh
+```
+
+The report could very. We show a single vulnerability report here:
+
+```
+...
+[EMULATION] attempted sequence:  ('ecall_opendb', 'ecall_execute_sql', 'ecall_closedb', 'ecall_opendb', 'ecall_closedb', 'ecall_execute_sql')
+[UAF-REPORT] Potential Use-after-free (UAF) at 0x6118c: mov ecx, dword ptr [rax + 0x64]
+Try to use memory at 0x30000e7a - 0x30000e7d
+Allocated memory range is 0x30000e0e - 0x300010b6
+Allocated memory at 0x14d14 and Freed at 0x14d89
+
+Recent 200 emulated instructions: 
+0xd340: mov qword ptr [rdx + rcx*8], r8
+0xd344: pop rbp
+0xd345: ret
+0xd2e0: mov edi, 9
+0xd2e5: mov esi, 1
+0xd2ea: call 0xd320
+0xd320: push rbp
+0xd321: mov rbp, rsp
+0xd324: mov dword ptr [rbp - 4], edi
+0xd327: mov dword ptr [rbp - 8], esi
+0xd32a: movsxd rax, dword ptr [rbp - 8]
+0xd32e: movsxd rcx, dword ptr [rbp - 4]
+...
+0x61161: mov rbp, rsp
+0x61164: sub rsp, 0x20
+0x61168: mov qword ptr [rbp - 0x10], rdi
+0x6116c: cmp qword ptr [rbp - 0x10], 0
+0x61171: jne 0x61188
+0x61188: mov rax, qword ptr [rbp - 0x10]
+0x6118c: mov ecx, dword ptr [rax + 0x64]
+Seed information: 
+0x30000000 [ 0xff ]  0x30000001 [ 0xff ]  0x30000002 [ 0xff ]
+...
+```
+
+The use-after-free was triggered because of following ECALL order: `ecall_opendb() -> ecall_closedb() -> ecall_execute_sql()`.
+
+As like microbenchmarks, we could also use `objdump` the enclave binary. However, the disassembly file would be very large. The above allocation, free, and use instructions are here:
+
+```
+0000000000014d00 <sqlite3MemMalloc>:
+   14d00:	55                   	push   rbp
+   14d01:	48 89 e5             	mov    rbp,rsp
+   14d04:	48 83 ec 10          	sub    rsp,0x10
+   14d08:	89 7d fc             	mov    DWORD PTR [rbp-0x4],edi
+   14d0b:	8b 45 fc             	mov    eax,DWORD PTR [rbp-0x4]
+   14d0e:	83 c0 08             	add    eax,0x8
+   14d11:	48 63 f8             	movsxd rdi,eax
+   14d14:	e8 57 71 0a 00       	call   bbe70 <dlmalloc>
+   ...
+0000000000014d60 <sqlite3MemFree>:
+   14d60:	55                   	push   rbp
+   14d61:	48 89 e5             	mov    rbp,rsp
+   14d64:	48 83 ec 10          	sub    rsp,0x10
+   14d68:	48 89 7d f8          	mov    QWORD PTR [rbp-0x8],rdi
+   14d6c:	48 8b 45 f8          	mov    rax,QWORD PTR [rbp-0x8]
+   14d70:	48 89 45 f0          	mov    QWORD PTR [rbp-0x10],rax
+   14d74:	48 8b 45 f0          	mov    rax,QWORD PTR [rbp-0x10]
+   14d78:	48 05 f8 ff ff ff    	add    rax,0xfffffffffffffff8
+   14d7e:	48 89 45 f0          	mov    QWORD PTR [rbp-0x10],rax
+   14d82:	48 8b 45 f0          	mov    rax,QWORD PTR [rbp-0x10]
+   14d86:	48 89 c7             	mov    rdi,rax
+   14d89:	e8 d9 7b 0a 00       	call   bc967 <dlfree>
+   ...
+0000000000061160 <sqlite3SafetyCheckOk>:
+   61160:	55                   	push   rbp
+   61161:	48 89 e5             	mov    rbp,rsp
+   61164:	48 83 ec 20          	sub    rsp,0x20
+   61168:	48 89 7d f0          	mov    QWORD PTR [rbp-0x10],rdi
+   6116c:	48 83 7d f0 00       	cmp    QWORD PTR [rbp-0x10],0x0
+   61171:	75 15                	jne    61188 <sqlite3SafetyCheckOk+0x28>
+   61173:	48 8d 3d 12 23 09 00 	lea    rdi,[rip+0x92312]        # f348c <g_dyn_entry_table+0x3094>
+   6117a:	e8 e1 41 fd ff       	call   35360 <logBadConnection>
+   6117f:	c7 45 fc 00 00 00 00 	mov    DWORD PTR [rbp-0x4],0x0
+   61186:	eb 3d                	jmp    611c5 <sqlite3SafetyCheckOk+0x65>
+   61188:	48 8b 45 f0          	mov    rax,QWORD PTR [rbp-0x10]
+   6118c:	8b 48 64             	mov    ecx,DWORD PTR [rax+0x64]
+   ...
+```

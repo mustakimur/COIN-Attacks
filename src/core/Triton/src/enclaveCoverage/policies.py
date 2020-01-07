@@ -52,8 +52,6 @@ RegMap = {
 heap_map = dict()
 heap_story = dict()
 thread_lock_track = dict()
-reg_prev_status = dict()
-mem_prev_status = dict()
 
 heap_alloc_base = BASE_ALLOC
 current_heap_alloc = 0
@@ -63,8 +61,7 @@ policy intialize related task
 
 
 def init_emulator():
-    reg_prev_status.clear()
-    mem_prev_status.clear()
+    None
 
 
 def exit_emulator():
@@ -225,26 +222,6 @@ def get_freed_info_for_addr(mem_addr):
 
 
 """
-program status handler related tasks
-"""
-
-
-def update_prog_stats(inst):
-    operands = inst.getOperands()
-    for operand in operands:
-        if operand.getType() == OPERAND.REG:
-            if (operand.getId() in RegMap):
-                regID = RegMap[operand.getId()]
-            else:
-                regID = operand.getId()
-            reg_prev_status[regID] = twos_complement(
-                Triton.getConcreteRegisterValue(operand), operand.getBitSize())
-        elif operand.getType() == OPERAND.MEM:
-            mem_prev_status[operand.getAddress()] = twos_complement(
-                Triton.getConcreteMemoryValue(operand), operand.getBitSize())
-
-
-"""
 policy handler related tasks
 """
 
@@ -357,7 +334,7 @@ def test_cmp_sides(inst, flag):
 
         if (inst.getType() == OPCODE.X86.JMP and cmp_match_cnt == 2):
             is_ie = True
-        
+
         if (inst.getType() == OPCODE.X86.CALL):
             cmp_next_counter = 0
         cmp_next_counter -= 1
@@ -389,8 +366,6 @@ def inspection(inst):
         test_cmp_sides(inst, True)
     elif(cmp_next_counter > 0):
         test_cmp_sides(inst, False)
-
-    update_prog_stats(inst)
 
 
 def policy_summary():
