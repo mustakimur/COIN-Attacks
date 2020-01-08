@@ -1,0 +1,57 @@
+Test Case 5 (time used: 0m0.400s, machine Intel Xeon E3-1275 with 64GB memory):
+
+Select your benchmark:
+1)use-after-free
+2)double-free
+3)stack overflow
+4)heap overflow
+5)stack memory leak
+6)heap memory leak
+7)null pointer dereference
+8)ineffectual condition
+5
+
+[EMULATION] attempted sequence:  ('ecall_start', 'ecall_start')
+[SL-REPORT] potential stack memory leak at 0xf12 for stack memory at 0x9ffeffd7
+Recent 200 emulated instructions: 
+0xfa0: push rbp
+0xfa1: mov rbp, rsp
+0xfa4: sub rsp, 0x50
+0xfa8: mov rax, qword ptr fs:[0x28]
+0xfb1: mov qword ptr [rbp - 8], rax
+0xfb5: mov qword ptr [rbp - 0x28], rdi
+0xfb9: mov qword ptr [rbp - 0x30], rsi
+0xfbd: xorps xmm0, xmm0
+0xfc0: movaps xmmword ptr [rbp - 0x20], xmm0
+0xfc4: lea rax, qword ptr [rbp - 0x20]
+0xfc8: mov esi, 0x10
+0xfcd: lea rdx, qword ptr [rbp - 0x34]
+0xfd1: mov rdi, rax
+0xfd4: mov qword ptr [rbp - 0x40], rax
+0xfd8: call 0x980
+0xfdd: mov rdi, qword ptr [rbp - 0x30]
+0xfe1: mov edx, dword ptr [rbp - 0x34]
+0xfe4: mov rsi, qword ptr [rbp - 0x40]
+0xfe8: mov dword ptr [rbp - 0x44], eax
+0xfeb: call 0xee0
+0xee0: push rbp
+0xee1: mov rbp, rsp
+0xee4: sub rsp, 0x20
+0xee8: mov qword ptr [rbp - 8], rdi
+0xeec: mov qword ptr [rbp - 0x10], rsi
+0xef0: mov dword ptr [rbp - 0x14], edx
+0xef3: movsxd rdi, dword ptr [rbp - 0x14]
+0xef7: call 0x847b
+0xefc: mov rcx, qword ptr [rbp - 8]
+0xf00: mov qword ptr [rcx], rax
+0xf03: mov rax, qword ptr [rbp - 8]
+0xf07: mov rdi, qword ptr [rax]
+0xf0a: mov rsi, qword ptr [rbp - 0x10]
+0xf0e: movsxd rdx, dword ptr [rbp - 0x14]
+0xf12: call 0xa632
+Seed information: 
+[EMULATION] attempted sequence:  ('ecall_start', 'ecall_start')
+
+real	0m0.400s
+user	0m0.375s
+sys	0m0.028s
