@@ -1,44 +1,14 @@
-#
-# Copyright (C) 2011-2018 Intel Corporation. All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-#   * Redistributions of source code must retain the above copyright
-#     notice, this list of conditions and the following disclaimer.
-#   * Redistributions in binary form must reproduce the above copyright
-#     notice, this list of conditions and the following disclaimer in
-#     the documentation and/or other materials provided with the
-#     distribution.
-#   * Neither the name of Intel Corporation nor the names of its
-#     contributors may be used to endorse or promote products derived
-#     from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-#
-
 ######## SGX SDK Settings ########
 
-SGX_SDK = /opt/intel/sgxsdk
-SGX_MODE = HW
-SGX_ARCH = x64
-SGX_DEBUG = 1
+SGX_SDK ?= /opt/intel/sgxsdk # Intel SGX directory
+SGX_MODE ?= SW # HW or SW (Hardware or Simulation mode)
+SGX_ARCH ?= x64 # x64 or x86
+SGX_DEBUG ?= 1 # DEBUG MODE
 
 CC=$(LLVM_BUILD)/bin/clang -Xclang -disable-O0-optnone -flto -std=gnu89 -D_GNU_SOURCE -O0 -g -fpermissive -Wno-return-type
 CXX=$(LLVM_BUILD)/bin/clang++ -Xclang -disable-O0-optnone -flto -std=c++03 -O0 -g -D_GNU_SOURCE -fpermissive -Wno-return-type
 
+# Find out whether 32 or 64 bit
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
 else ifeq ($(findstring -m32, $(CXXFLAGS)), -m32)
@@ -46,12 +16,12 @@ else ifeq ($(findstring -m32, $(CXXFLAGS)), -m32)
 endif
 
 ifeq ($(SGX_ARCH), x86)
-	SGX_COMMON_FLAGS := -m32
-	SGX_LIBRARY_PATH := $(SGX_SDK)/lib
-	SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x86/sgx_sign
-	SGX_EDGER8R := $(SGX_SDK)/bin/x86/sgx_edger8r
+	SGX_COMMON_CFLAGS := -m32 # flag to compiler regarding 32 or 64 bit
+	SGX_LIBRARY_PATH := $(SGX_SDK)/lib # SGX library path
+	SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x86/sgx_sign # Tool for signing enclaves
+	SGX_EDGER8R := $(SGX_SDK)/bin/x86/sgx_edger8r # Tool to create bridge routines
 else
-	SGX_COMMON_FLAGS := -m64
+	SGX_COMMON_CFLAGS := -m64
 	SGX_LIBRARY_PATH := $(SGX_SDK)/lib64
 	SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x64/sgx_sign
 	SGX_EDGER8R := $(SGX_SDK)/bin/x64/sgx_edger8r
@@ -64,17 +34,10 @@ endif
 endif
 
 ifeq ($(SGX_DEBUG), 1)
-        SGX_COMMON_FLAGS += -O0 -g
+        SGX_COMMON_CFLAGS += -O0 -g # Add debug symbols, turn off optimisations
 else
-        SGX_COMMON_FLAGS += -O0
+        SGX_COMMON_CFLAGS += -O0 # turn on optimisations
 endif
-
-SGX_COMMON_FLAGS += -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
-                    -Waddress -Wsequence-point -Wformat-security \
-                    -Wmissing-include-dirs -Wfloat-equal -Wundef -Wshadow \
-                    -Wcast-align -Wcast-qual -Wconversion -Wredundant-decls
-SGX_COMMON_CFLAGS := $(SGX_COMMON_FLAGS) -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
-SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++11
 
 ######## App Settings ########
 
@@ -84,10 +47,10 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := App/App.cpp $(wildcard App/Edger8rSyntax/*.cpp) $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include
+App_Cpp_Files := App/App.cpp
+App_Include_Paths := -IApp -I$(SGX_SDK)/include
 
-App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths)
+App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
 # Three configuration modes - Debug, prerelease, release
 #   Debug - Macro DEBUG enabled.
@@ -101,8 +64,8 @@ else
         App_C_Flags += -DNDEBUG -UEDEBUG -UDEBUG
 endif
 
-App_Cpp_Flags := $(App_C_Flags)
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread 
+App_Cpp_Flags := $(App_C_Flags) -std=c++11
+App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread
 
 ifneq ($(SGX_MODE), HW)
 	App_Link_Flags += -lsgx_uae_service_sim
@@ -110,7 +73,7 @@ else
 	App_Link_Flags += -lsgx_uae_service
 endif
 
-App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
+App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o) App/ocalls.o
 
 App_Name := app
 
@@ -125,18 +88,12 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/Edger8rSyntax/*.cpp) $(wildcard Enclave/TrustedLibrary/*.cpp)
-Enclave_Include_Paths := -IInclude -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
+Enclave_Cpp_Files := Enclave/Enclave.cpp Enclave/sqlite3.c
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
 
-Enclave_C_Flags := $(Enclave_Include_Paths) -nostdinc -fvisibility=hidden -fpie -ffunction-sections -fdata-sections
-CC_BELOW_4_9 := $(shell expr "`$(CC) -dumpversion`" \< "4.9")
-ifeq ($(CC_BELOW_4_9), 1)
-	Enclave_C_Flags += -fstack-protector
-else
-	Enclave_C_Flags += -fstack-protector-strong
-endif
-
-Enclave_Cpp_Flags := $(Enclave_C_Flags) -nostdinc++
+Enclave_C_Flags := $(SGX_COMMON_CFLAGS) -nostdinc -fvisibility=hidden -fpie -ffunction-sections -fdata-sections -fstack-protector-strong
+Enclave_C_Flags += $(Enclave_Include_Paths)
+Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
@@ -145,7 +102,7 @@ Enclave_Cpp_Flags := $(Enclave_C_Flags) -nostdinc++
 #       Use `--start-group' and `--end-group' to link these libraries.
 # Do NOT move the libraries linked with `--start-group' and `--end-group' within `--whole-archive' and `--no-whole-archive' options.
 # Otherwise, you may get some undesirable errors.
-Enclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
+Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
 	-Wl,--whole-archive -l$(Trts_Library_Name) -Wl,--no-whole-archive \
 	-Wl,--start-group -lsgx_tstdc -lsgx_tcxx -l$(Crypto_Library_Name) -l$(Service_Library_Name) -Wl,--end-group \
 	-Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
@@ -153,7 +110,7 @@ Enclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles 
 	-Wl,--defsym,__ImageBase=0 -Wl,--gc-sections   \
 	-Wl,--version-script=Enclave/Enclave.lds
 
-Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)
+Enclave_Cpp_Objects := Enclave/Enclave.o Enclave/sqlite3.o Enclave/ocall_interface.o
 
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
@@ -177,23 +134,21 @@ else
 endif
 endif
 
+##### TARGETS #####
 
-.PHONY: all target run
-all: .config_$(Build_Mode)_$(SGX_ARCH)
-	@$(MAKE) target
+.PHONY: all run
 
+# Default target "all" is to build
 ifeq ($(Build_Mode), HW_RELEASE)
-target:  $(App_Name) $(Enclave_Name)
+all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Enclave_Name)
 	@echo "The project has been built in release hardware mode."
 	@echo "Please sign the $(Enclave_Name) first with your signing key before you run the $(App_Name) to launch and access the enclave."
 	@echo "To sign the enclave use the command:"
 	@echo "   $(SGX_ENCLAVE_SIGNER) sign -key <your key> -enclave $(Enclave_Name) -out <$(Signed_Enclave_Name)> -config $(Enclave_Config_File)"
 	@echo "You can also sign the enclave using an external signing tool."
 	@echo "To build the project in simulation mode set SGX_MODE=SIM. To build the project in prerelease mode set SGX_PRERELEASE=1 and SGX_MODE=HW."
-
-
 else
-target: $(App_Name) $(Signed_Enclave_Name)
+all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Signed_Enclave_Name)
 ifeq ($(Build_Mode), HW_DEBUG)
 	@echo "The project has been built in debug hardware mode."
 else ifeq ($(Build_Mode), SIM_DEBUG)
@@ -205,64 +160,93 @@ else ifeq ($(Build_Mode), SIM_PRERELEASE)
 else
 	@echo "The project has been built in release simulation mode."
 endif
-
 endif
 
+# Build and run project
 run: all
 ifneq ($(Build_Mode), HW_RELEASE)
-	@$(CURDIR)/$(App_Name)
+	$(CURDIR)/$(App_Name)
 	@echo "RUN  =>  $(App_Name) [$(SGX_MODE)|$(SGX_ARCH), OK]"
 endif
 
-.config_$(Build_Mode)_$(SGX_ARCH):
-	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
-	@touch .config_$(Build_Mode)_$(SGX_ARCH)
-
 ######## App Objects ########
 
-App/Enclave_u.h: $(SGX_EDGER8R) Enclave/Enclave.edl
-	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+# Genereate untrusted brigde routines (Enclave_u.c and Enclave_u.h) using .edl file
+App/Enclave_u.c: $(SGX_EDGER8R) Enclave/Enclave.edl
+	cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 	@echo "GEN  =>  $@"
 
-App/Enclave_u.c: App/Enclave_u.h
-
+# Compile untrusted brigde routines
 App/Enclave_u.o: App/Enclave_u.c
-	@$(CC) $(GFLAGS) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
-	@echo "$(CC)   <=  $<"
+	$(CC) $(App_C_Flags) -DSGX_UNTRUSTED -c $< -o $@
+	@echo "CC   <=  $<"
 
-App/%.o: App/%.cpp  App/Enclave_u.h
-	@$(CXX) $(GXXFLAGS) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
-	@echo "$(CXX)  <=  $<"
+# Compile ocalls
+App/ocalls.o: App/ocalls.c
+	$(CC) $(App_C_Flags) -c $< -o $@
+	@echo "CC   <=  $<"
 
-$(App_Name): App/Enclave_u.o $(App_Cpp_Objects)
-	@$(CXX) $(GXXFLAGS) $^ -o $@ $(App_Link_Flags)
+# Compile untrusted Application
+App/%.o: App/%.cpp
+	$(CXX) $(App_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
+
+# Link and generate main Application executable
+$(App_Name): App/Enclave_u.o App/ocalls.o $(App_Cpp_Objects)
+	$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
+
+.config_$(Build_Mode)_$(SGX_ARCH):
+	rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
+	@touch .config_$(Build_Mode)_$(SGX_ARCH)
 
 ######## Enclave Objects ########
 
-Enclave/Enclave_t.h: $(SGX_EDGER8R) Enclave/Enclave.edl
-	@cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+# Genereate trusted brigde routines (Enclave_t.c and Enclave_t.h) using .edl file
+Enclave/Enclave_t.c: $(SGX_EDGER8R) Enclave/Enclave.edl
+	cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 	@echo "GEN  =>  $@"
 
-Enclave/Enclave_t.c: Enclave/Enclave_t.h
-
+# Compile trusted brigde routines
 Enclave/Enclave_t.o: Enclave/Enclave_t.c
-	@$(CC) $(GFLAGS) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@
-	@echo "$(CC)   <=  $<"
+	$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@echo "CC   <=  $<"
 
-Enclave/%.o: Enclave/%.cpp Enclave/Enclave_t.h
-	@$(CXX) $(GXXFLAGS) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
-	@echo "$(CXX)  <=  $<"
+# Compile trusted Enclave
+Enclave/Enclave.o: Enclave/Enclave.cpp
+	$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
 
+# Preprocess sqlite3
+Enclave/sqlite3.i: Enclave/sqlite3.c
+	$(CC) -I$(SGX_SDK)/include -DSQLITE_THREADSAFE=0 -E $< -o $@
+	@echo "CC-Preprocess  <=  $<"
+
+# Compile sqlite3
+Enclave/sqlite3.o: Enclave/sqlite3.i Enclave/sqlite3.c
+	$(CC) $(Enclave_C_Flags) -DSQLITE_THREADSAFE=0 -c $< -o $@
+	@echo "CC  <=  $<"
+
+# Preprocess sqlite3
+Enclave/ocall_interface.i: Enclave/ocall_interface.c
+	$(CC) -I$(SGX_SDK)/include -E $< -o $@
+	@echo "CC-Preprocess  <=  $<"
+
+# Compile ocall_interface
+Enclave/ocall_interface.o: Enclave/ocall_interface.i Enclave/Enclave_t.c
+	$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@echo "CC  <=  $<"
+
+# Link and generate Enclave shared library/executable
 $(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
-	@$(CXX) $(GXXFLAGS) $^ -o $@ $(Enclave_Link_Flags)
+	$(CXX) $^ -o $@ $(Enclave_Link_Flags)
 	@echo "LINK =>  $@"
 
 $(Signed_Enclave_Name): $(Enclave_Name)
-	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
+	$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
 	@echo "SIGN =>  $@"
 
 .PHONY: clean
 
 clean:
-	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.* *.bc *.ll *.o
+	rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.* Enclave/sqlite3.i Enclave/ocall_interface.i
