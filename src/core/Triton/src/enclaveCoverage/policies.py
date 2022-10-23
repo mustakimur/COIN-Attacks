@@ -277,16 +277,20 @@ def oob_uaf_policy(inst):
 
                 if (isFlagged):
                     msg = ""
-                    if (addr_start >= alloc_start and addr_start <= alloc_end
-                            and addr_end > alloc_end):
-                        msg = '[ERROR] Potential Out of Bound (OOB) at ' + hex(
-                            inst.getAddress()) + ': ' + inst.getDisassembly(
-                        ) + '\nTry to use memory at ' + hex(
-                                addr_start) + ' - ' + hex(
-                                    addr_end
-                        ) + '\nAllocated Memory range is ' + hex(
-                                    alloc_start) + ' - ' + hex(
-                                        alloc_end) + '\n'
+                    for alloc_mem, alloc_size in heap_map.iteritems():
+                        alloc_start = alloc_mem
+                        alloc_end = alloc_mem + alloc_size - 0x1
+                        if (addr_start >= alloc_start and addr_start <= alloc_end
+                                and addr_end > alloc_end):
+                            msg = '[ERROR] Potential Out of Bound (OOB) at ' + hex(
+                                inst.getAddress()) + ': ' + inst.getDisassembly(
+                            ) + '\nTry to use memory at ' + hex(
+                                    addr_start) + ' - ' + hex(
+                                        addr_end
+                            ) + '\nAllocated Memory range is ' + hex(
+                                        alloc_start) + ' - ' + hex(
+                                            alloc_end) + '\n'
+                            break
                     else:
                         for st_alloc_mem, st_alloc_info in heap_story.iteritems(
                         ):
